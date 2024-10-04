@@ -1,0 +1,57 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-oci-artifact-browser
+  labels:
+    app: simple-oci-artifact-browser
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simple-oci-artifact-browser
+  template:
+    metadata:
+      labels:
+        app: simple-oci-artifact-browser
+    spec:
+      volumes:
+        - name: files
+          emptyDir: {}
+      containers:
+        - name: simple-oci-artifact-browser
+          image: quay.io/psturc/simple-oci-artifact-browser
+          imagePullPolicy: Always
+          env:
+            - name: QUAY_ORG_REPO
+              value: "konflux-test-storage/konflux-team/e2e-tests"
+            - name: PORT
+              value: "8080"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - mountPath: /app/files
+              name: files
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: simple-oci-artifact-browser
+  labels:
+    app: simple-oci-artifact-browser
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      name: simple-oci-artifact-browser
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    app: simple-oci-artifact-browser

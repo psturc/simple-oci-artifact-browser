@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artifacts Browser</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            padding: 20px;
+        }
+        h1 {
+            color: #4CAF50;
+            text-align: center;
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+        li {
+            margin: 10px 0;
+            font-size: 18px;
+        }
+        a {
+            text-decoration: none;
+            color: #333;
+            padding: 8px 12px;
+            border-radius: 5px;
+            display: inline-block;
+        }
+        a:hover {
+            background-color: #e0e0e0;
+        }
+        .file, .directory {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px;
+        }
+        .icon {
+            margin-right: 10px;
+            font-size: 20px;
+        }
+        .metadata {
+            color: #888;
+            font-size: 14px;
+        }
+        .directory a {
+            color: #4CAF50;
+        }
+        .parent {
+            font-size: 18px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <h1>📁 Artifacts Browser</h1>
+    <h3>Showing latest 50 OCI artifacts for repo:<a href="https://{{ .Repository }}">{{ .Repository }}</a></h3>
+
+    <ul>
+        {{ if .ParentPath }}
+            <li class="parent"><a href="{{ .ParentPath }}">⬅️ Go Up (..)</a></li>
+        {{ end }}
+        
+        {{ range .Files }}
+            <li class="{{ if .IsDir }}directory{{ else }}file{{ end }}">
+                <div>
+                    {{ if .IsDir }}
+                        <span class="icon">📂</span><a href="{{ .Path }}/">{{ .Name }}/</a>
+                    {{ else }}
+                        <span class="icon">📄</span><a href="{{ .Path }}">{{ .Name }}</a>
+                    {{ end }}
+                </div>
+                <div class="metadata">
+                    {{ if not .IsDir }}
+                        {{ .Size }} bytes | Last modified: {{ .ModTime.Format "Jan 2, 2006 3:04 PM" }}
+                    {{ end }}
+                </div>
+            </li>
+        {{ end }}
+    </ul>
+</body>
+</html>
