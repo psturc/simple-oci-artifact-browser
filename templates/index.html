@@ -59,6 +59,7 @@
 <body>
     <h1>📁 Artifacts Browser</h1>
     <h3>Showing latest 50 OCI artifacts for repo:<a href="https://{{ .Repository }}">{{ .Repository }}</a></h3>
+    <h3>Artifacts are synced every {{ .SyncInterval }} minute(s)</a></h3>
 
     <ul>
         {{ if .ParentPath }}

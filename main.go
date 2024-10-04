@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"time"
 )
 
@@ -23,9 +24,10 @@ type FileData struct {
 }
 
 type DirectoryListing struct {
-	Files      []FileData
-	ParentPath string
-	Repository string
+	Files        []FileData
+	ParentPath   string
+	SyncInterval string
+	Repository   string
 }
 
 type TagResponse struct {
@@ -41,18 +43,36 @@ var baseDir string = "./files"
 
 var quayOrgAndRepo string = os.Getenv("QUAY_ORG_REPO")
 var port string = os.Getenv("PORT")
+var syncIntervalEnvValue string = os.Getenv("SYNC_INTERVAL_MINUTES")
+var syncInterval int
 
 func main() {
+	var err error
 
 	if quayOrgAndRepo == "" {
 		log.Fatal("QUAY_ORG_REPO env var is empty")
 	}
+	if syncIntervalEnvValue == "" {
+		log.Println("SYNC_INTERVAL_MINUTES env var is empty, setting default value to 1 minute")
+		syncIntervalEnvValue = "1"
+	}
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	syncInterval, err = strconv.Atoi(syncIntervalEnvValue)
+	if err != nil {
+		log.Println("env var SYNC_INTERVAL_MINUTES value is invalid, setting default value to 1 minute")
+		syncInterval = 1
+	}
 
 	go func() {
 		if err := orasPull(); err != nil {
 			log.Printf("ERROR: %s\n", err)
+		}
+		for range time.Tick(time.Duration(syncInterval) * time.Minute) {
+			if err := orasPull(); err != nil {
+				log.Printf("ERROR: %s\n", err)
+			}
 		}
 	}()
 
@@ -115,9 +135,10 @@ func main() {
 			// Parse and execute the template
 			tmpl := template.Must(template.ParseFiles("templates/index.html"))
 			tmpl.Execute(w, DirectoryListing{
-				Files:      fileDataList,
-				ParentPath: parentPath,
-				Repository: fmt.Sprintf("quay.io/%s", quayOrgAndRepo),
+				Files:        fileDataList,
+				ParentPath:   parentPath,
+				SyncInterval: syncIntervalEnvValue,
+				Repository:   fmt.Sprintf("quay.io/%s", quayOrgAndRepo),
 			})
 		} else {
 			// If it's a file, serve the file
@@ -131,6 +152,7 @@ func main() {
 
 func orasPull() error {
 	url := fmt.Sprintf("https://quay.io/api/v1/repository/%s/tag/", quayOrgAndRepo)
+	log.Printf("going to pull latest artifacts from: %s", url)
 	res, err := http.Get(url)
 	if err != nil {
 		return err
