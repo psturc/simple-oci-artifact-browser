@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -27,7 +28,12 @@ type DirectoryListing struct {
 	Files        []FileData
 	ParentPath   string
 	SyncInterval string
-	Repository   string
+	Repositories []Repository
+}
+
+type Repository struct {
+	Name string
+	Dir  string
 }
 
 type TagResponse struct {
@@ -41,15 +47,17 @@ type Tag struct {
 // Base directory to serve files from
 var baseDir string = "./files"
 
-var quayOrgAndRepo string = os.Getenv("QUAY_ORG_REPO")
+var quayOrgAndRepos string = os.Getenv("QUAY_ORG_REPOS")
 var port string = os.Getenv("PORT")
 var syncIntervalEnvValue string = os.Getenv("SYNC_INTERVAL_MINUTES")
 var syncInterval int
 
+var repositories = []Repository{}
+
 func main() {
 	var err error
 
-	if quayOrgAndRepo == "" {
+	if quayOrgAndRepos == "" {
 		log.Fatal("QUAY_ORG_REPO env var is empty")
 	}
 	if syncIntervalEnvValue == "" {
@@ -63,6 +71,15 @@ func main() {
 	if err != nil {
 		log.Println("env var SYNC_INTERVAL_MINUTES value is invalid, setting default value to 1 minute")
 		syncInterval = 1
+	}
+
+	repos := strings.Split(quayOrgAndRepos, ",")
+	for _, repo := range repos {
+		trimmedspace := strings.TrimSpace(repo)
+		repoNameSplit := strings.Split(repo, "/")
+		dirName := repoNameSplit[len(repoNameSplit)-1]
+
+		repositories = append(repositories, Repository{Name: trimmedspace, Dir: dirName})
 	}
 
 	go func() {
@@ -138,7 +155,7 @@ func main() {
 				Files:        fileDataList,
 				ParentPath:   parentPath,
 				SyncInterval: syncIntervalEnvValue,
-				Repository:   fmt.Sprintf("quay.io/%s", quayOrgAndRepo),
+				Repositories: repositories,
 			})
 		} else {
 			// If it's a file, serve the file
@@ -151,47 +168,49 @@ func main() {
 }
 
 func orasPull() error {
-	url := fmt.Sprintf("https://quay.io/api/v1/repository/%s/tag/", quayOrgAndRepo)
-	log.Printf("going to pull latest artifacts from: %s", url)
-	res, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("got unexpected status from quay repo %s: %d", url, res.StatusCode)
-	}
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return fmt.Errorf("cannot read body of a response from quay.io regarding %s %+v", url, err)
-	}
-	tagResponse := &TagResponse{}
-	if err = json.Unmarshal(body, tagResponse); err != nil {
-		return fmt.Errorf("failed to unmarshal response from quay.io regarding regarding %s %+v", url, err)
-	}
-	if len(tagResponse.Tags) < 1 {
-		return fmt.Errorf("cannot get manifest digest regarding %s %+v", url, err)
-	}
-
-	cwd, _ := os.Getwd()
-	filesPath := filepath.Clean(filepath.Join(cwd, baseDir))
-	log.Println(cwd)
-
-	for _, tag := range tagResponse.Tags {
-		prefix := getDatetimePrefix(tag.LastModified)
-		outputPath := filepath.Clean(filepath.Join(filesPath, prefix+"_"+tag.Name))
-		_, err := os.Stat(outputPath)
-		if err == nil {
-			continue
-		}
-		if err := os.MkdirAll(outputPath, 0700); err != nil {
+	for _, repo := range repositories {
+		url := fmt.Sprintf("https://quay.io/api/v1/repository/%s/tag/", repo.Name)
+		log.Printf("going to pull latest artifacts from: %s", url)
+		res, err := http.Get(url)
+		if err != nil {
 			return err
 		}
-		app := "oras"
-		args := []string{"pull", fmt.Sprintf("quay.io/%s:%s", quayOrgAndRepo, tag.Name), "--output", fmt.Sprintf("%s", outputPath)}
-		cmd := exec.Command(app, args...)
-		if err := cmd.Run(); err != nil {
-			return err
+		if res.StatusCode != http.StatusOK {
+			return fmt.Errorf("got unexpected status from quay repo %s: %d", url, res.StatusCode)
+		}
+
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			return fmt.Errorf("cannot read body of a response from quay.io regarding %s %+v", url, err)
+		}
+		tagResponse := &TagResponse{}
+		if err = json.Unmarshal(body, tagResponse); err != nil {
+			return fmt.Errorf("failed to unmarshal response from quay.io regarding regarding %s %+v", url, err)
+		}
+		if len(tagResponse.Tags) < 1 {
+			return fmt.Errorf("cannot get manifest digest regarding %s %+v", url, err)
+		}
+
+		cwd, _ := os.Getwd()
+		filesPath := filepath.Clean(filepath.Join(cwd, baseDir))
+		log.Println(cwd)
+
+		for _, tag := range tagResponse.Tags {
+			prefix := getDatetimePrefix(tag.LastModified)
+			outputPath := filepath.Clean(filepath.Join(filesPath, repo.Dir, prefix+"_"+tag.Name))
+			_, err := os.Stat(outputPath)
+			if err == nil {
+				continue
+			}
+			if err := os.MkdirAll(outputPath, 0700); err != nil {
+				return err
+			}
+			app := "oras"
+			args := []string{"pull", fmt.Sprintf("quay.io/%s:%s", repo.Name, tag.Name), "--output", fmt.Sprintf("%s", outputPath)}
+			cmd := exec.Command(app, args...)
+			if err := cmd.Run(); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

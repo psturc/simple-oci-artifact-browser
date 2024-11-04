@@ -23,8 +23,8 @@ spec:
           image: quay.io/psturc/simple-oci-artifact-browser
           imagePullPolicy: Always
           env:
-            - name: QUAY_ORG_REPO
-              value: "konflux-test-storage/konflux-team/e2e-tests"
+            - name: QUAY_ORG_REPOS
+              value: "konflux-test-storage/konflux-team/e2e-tests,konflux-test-storage/konflux-team/release-service-catalog"
             - name: PORT
               value: "8080"
             - name: SYNC_INTERVAL_MINUTES
