@@ -60,7 +60,7 @@
     <h1>📁 Artifacts Browser</h1>
     <h3>Showing latest 50 OCI artifacts for repo:</h3>
     {{ range .Repositories }}
-        <a href="https://{{ .Name }}">{{ .Name }}</a>
+        <a href="https://quay.io/{{ .Name }}">quay.io/{{ .Name }}</a>
     {{ end }}
     <h3>Artifacts are synced every {{ .SyncInterval }} minute(s)</a></h3>
 
