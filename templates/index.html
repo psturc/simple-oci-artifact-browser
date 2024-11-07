@@ -73,7 +73,7 @@
             <li class="{{ if .IsDir }}directory{{ else }}file{{ end }}">
                 <div>
                     {{ if .IsDir }}
-                        <span class="icon">📂</span><a href="{{ .Path }}/">{{ .Name }}/</a>
+                        <span class="icon">📂</span><a href="{{ .Path }}/">{{ .Name }}</a>
                     {{ else }}
                         <span class="icon">📄</span><a href="{{ .Path }}">{{ .Name }}</a>
                     {{ end }}
@@ -81,6 +81,8 @@
                 <div class="metadata">
                     {{ if not .IsDir }}
                         {{ .Size }} bytes | Last modified: {{ .ModTime.Format "Jan 2, 2006 3:04 PM" }}
+                    {{ else }}
+                        Last modified: {{ .ModTime.Format "Jan 2, 2006 3:04 PM" }}
                     {{ end }}
                 </div>
             </li>

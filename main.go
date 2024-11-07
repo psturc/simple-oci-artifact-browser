@@ -119,17 +119,26 @@ func main() {
 				filePath := filepath.Join(r.URL.Path, file.Name())
 				info, _ := file.Info() // Fetch file info for metadata
 
+				filename := file.Name()
+				modtime := info.ModTime()
+				if file.IsDir() && isArtifactDir(file.Name()) {
+					filename, modtime = getArtifactDirProps(filename)
+				}
+
 				fileDataList = append(fileDataList, FileData{
-					Name:    file.Name(),
+					Name:    filename,
 					Path:    filePath,
 					IsDir:   file.IsDir(),
-					Size:    info.Size(),    // File size
-					ModTime: info.ModTime(), // Last modification time
+					Size:    info.Size(), // File size
+					ModTime: modtime,     // Last modification time
 				})
 			}
 
 			// Sort files: directories first, then files
 			sort.SliceStable(fileDataList, func(i, j int) bool {
+				if fileDataList[i].IsDir && fileDataList[j].IsDir {
+					return fileDataList[i].ModTime.After(fileDataList[j].ModTime)
+				}
 				if fileDataList[i].IsDir && !fileDataList[j].IsDir {
 					return true
 				}
@@ -197,7 +206,7 @@ func orasPull() error {
 
 		for _, tag := range tagResponse.Tags {
 			prefix := getDatetimePrefix(tag.LastModified)
-			outputPath := filepath.Clean(filepath.Join(filesPath, repo.Dir, prefix+"_"+tag.Name))
+			outputPath := filepath.Clean(filepath.Join(filesPath, repo.Dir, prefix+"+"+tag.Name))
 			_, err := os.Stat(outputPath)
 			if err == nil {
 				continue
@@ -244,4 +253,29 @@ func getDatetimePrefix(input string) string {
 
 	// Format the parsed time to the desired output format
 	return t.Format(outputLayout)
+}
+
+func isArtifactDir(name string) bool {
+	if containsTimedatePrefix(name) {
+		return true
+	}
+	return false
+}
+
+func containsTimedatePrefix(name string) bool {
+	inputLayout := "2006-01-02_15-04-05"
+
+	if split := strings.Split(name, "+"); len(split) == 2 {
+		if _, err := time.Parse(inputLayout, split[0]); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func getArtifactDirProps(name string) (string, time.Time) {
+	inputLayout := "2006-01-02_15-04-05"
+	split := strings.Split(name, "+")
+	newTime, _ := time.Parse(inputLayout, split[0])
+	return split[1], newTime
 }
