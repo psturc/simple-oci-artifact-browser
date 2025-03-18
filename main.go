@@ -16,6 +16,8 @@ import (
 	"time"
 )
 
+const timeInputLayout = "Mon, 02 Jan 2006 15:04:05 -0700"
+
 type FileData struct {
 	Name    string
 	Path    string
@@ -121,9 +123,6 @@ func main() {
 
 				filename := file.Name()
 				modtime := info.ModTime()
-				if file.IsDir() && isArtifactDir(file.Name()) {
-					filename, modtime = getArtifactDirProps(filename)
-				}
 
 				fileDataList = append(fileDataList, FileData{
 					Name:    filename,
@@ -202,80 +201,42 @@ func orasPull() error {
 
 		cwd, _ := os.Getwd()
 		filesPath := filepath.Clean(filepath.Join(cwd, baseDir))
-		log.Println(cwd)
 
 		for _, tag := range tagResponse.Tags {
-			prefix := getDatetimePrefix(tag.LastModified)
-			outputPath := filepath.Clean(filepath.Join(filesPath, repo.Dir, prefix+"+"+tag.Name))
-			_, err := os.Stat(outputPath)
+			tagRef := fmt.Sprintf("quay.io/%s:%s", repo.Name, tag.Name)
+			outputPath := filepath.Clean(filepath.Join(filesPath, repo.Dir, tag.Name))
+			tagLastModified, err := time.Parse(timeInputLayout, tag.LastModified)
+			if err != nil {
+				log.Printf("error parsing time for last modified: %+v\n", err)
+			}
+			dirInfo, err := os.Stat(outputPath)
+			// Directory with artifacts already exists
 			if err == nil {
-				continue
+				if !tagLastModified.After(dirInfo.ModTime()) {
+					continue
+				}
+				log.Printf("got newer content for for %s!(tag last modified: %s, dir last modified %s)\n", tagRef, tagLastModified, dirInfo.ModTime().Format(timeInputLayout))
+				err := os.RemoveAll(outputPath)
+				if err != nil {
+					log.Printf("failed to remove the directory %s: %+v", outputPath, err)
+					continue
+				}
 			}
 			if err := os.MkdirAll(outputPath, 0700); err != nil {
 				return err
 			}
+
 			app := "oras"
-			args := []string{"pull", fmt.Sprintf("quay.io/%s:%s", repo.Name, tag.Name), "--output", fmt.Sprintf("%s", outputPath)}
+			args := []string{"pull", tagRef, "--output", fmt.Sprintf("%s", outputPath)}
 			cmd := exec.Command(app, args...)
 			if err := cmd.Run(); err != nil {
 				return err
 			}
+			err = os.Chtimes(outputPath, tagLastModified, tagLastModified)
+			if err != nil {
+				log.Printf("failed to change the mod time for the directory %s: %+v", outputPath, err)
+			}
 		}
 	}
 	return nil
-}
-
-// exists returns whether the given file or directory exists
-func exists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, err
-}
-
-func getDatetimePrefix(input string) string {
-	// Layout of the input datetime string
-	inputLayout := "Mon, 02 Jan 2006 15:04:05 -0700"
-
-	// Parse the input datetime string into a time.Time object
-	t, err := time.Parse(inputLayout, input)
-	if err != nil {
-		log.Println("error parsing time:", err)
-		return ""
-	}
-
-	// Desired output layout in the format "YYYY-MM-DD-HH-MM-SS"
-	outputLayout := "2006-01-02_15-04-05"
-
-	// Format the parsed time to the desired output format
-	return t.Format(outputLayout)
-}
-
-func isArtifactDir(name string) bool {
-	if containsTimedatePrefix(name) {
-		return true
-	}
-	return false
-}
-
-func containsTimedatePrefix(name string) bool {
-	inputLayout := "2006-01-02_15-04-05"
-
-	if split := strings.Split(name, "+"); len(split) == 2 {
-		if _, err := time.Parse(inputLayout, split[0]); err == nil {
-			return true
-		}
-	}
-	return false
-}
-
-func getArtifactDirProps(name string) (string, time.Time) {
-	inputLayout := "2006-01-02_15-04-05"
-	split := strings.Split(name, "+")
-	newTime, _ := time.Parse(inputLayout, split[0])
-	return split[1], newTime
 }
