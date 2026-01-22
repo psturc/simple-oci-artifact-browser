@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -15,6 +16,9 @@ import (
 	"strings"
 	"time"
 )
+
+// Maximum size for decompressed .gz files (50MB) to prevent decompression bombs
+const maxDecompressedSize = 50 * 1024 * 1024
 
 const timeInputLayout = "Mon, 02 Jan 2006 15:04:05 -0700"
 
@@ -172,16 +176,53 @@ func main() {
 			// If it's a file, serve the file directly
 			// Note: http.ServeFile redirects /path/index.html to /path/, which breaks
 			// serving index.html files. Read and write content directly instead.
-			content, err := os.ReadFile(requestPath)
-			if err != nil {
-				http.Error(w, "Unable to read file", http.StatusInternalServerError)
-				return
+
+			var content []byte
+			var err error
+			ext := strings.ToLower(filepath.Ext(requestPath))
+
+			// For .gz files, decompress and serve the content
+			if ext == ".gz" {
+				file, err := os.Open(requestPath)
+				if err != nil {
+					http.Error(w, "Unable to open file", http.StatusInternalServerError)
+					return
+				}
+				defer file.Close()
+
+				gzReader, err := gzip.NewReader(file)
+				if err != nil {
+					http.Error(w, "Unable to decompress file", http.StatusInternalServerError)
+					return
+				}
+				defer gzReader.Close()
+
+				// Limit decompressed size to prevent decompression bombs
+				limitedReader := io.LimitReader(gzReader, maxDecompressedSize+1)
+				content, err = io.ReadAll(limitedReader)
+				if err != nil {
+					http.Error(w, "Unable to read decompressed content", http.StatusInternalServerError)
+					return
+				}
+				if len(content) > maxDecompressedSize {
+					http.Error(w, "Decompressed file too large (max 50MB)", http.StatusRequestEntityTooLarge)
+					return
+				}
+
+				// Get the extension of the inner file (without .gz)
+				innerName := strings.TrimSuffix(filepath.Base(requestPath), ".gz")
+				ext = strings.ToLower(filepath.Ext(innerName))
+			} else {
+				content, err = os.ReadFile(requestPath)
+				if err != nil {
+					http.Error(w, "Unable to read file", http.StatusInternalServerError)
+					return
+				}
 			}
 
 			// Detect content type from filename
 			// Default to text/plain so unknown file types are viewable in the browser
 			contentType := "text/plain; charset=utf-8"
-			ext := strings.ToLower(filepath.Ext(requestPath))
 			switch ext {
 			case ".html", ".htm":
 				contentType = "text/html; charset=utf-8"
@@ -205,7 +246,7 @@ func main() {
 				contentType = "image/svg+xml"
 			case ".pdf":
 				contentType = "application/pdf"
-			case ".zip", ".gz", ".tar", ".tgz":
+			case ".zip", ".tar", ".tgz":
 				contentType = "application/octet-stream"
 			}
 
