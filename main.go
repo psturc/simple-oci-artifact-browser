@@ -96,9 +96,11 @@ func main() {
 	}()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("DEBUG: Request URL path: %q", r.URL.Path)
 
 		// Clean up the URL path (normalize it, remove trailing slashes)
 		requestPath := filepath.Clean(filepath.Join(baseDir, r.URL.Path))
+		log.Printf("DEBUG: Resolved file path: %q", requestPath)
 
 		// Get file info for the requested path
 		fileInfo, err := os.Stat(requestPath)
@@ -108,6 +110,7 @@ func main() {
 		}
 
 		// If the requested path is a directory, list its contents
+		log.Printf("DEBUG: IsDir=%v for path %q", fileInfo.IsDir(), requestPath)
 		if fileInfo.IsDir() {
 			files, err := os.ReadDir(requestPath)
 			if err != nil {
@@ -166,8 +169,49 @@ func main() {
 				Repositories: repositories,
 			})
 		} else {
-			// If it's a file, serve the file
-			http.ServeFile(w, r, requestPath)
+			// If it's a file, serve the file directly
+			// Note: http.ServeFile redirects /path/index.html to /path/, which breaks
+			// serving index.html files. Read and write content directly instead.
+			content, err := os.ReadFile(requestPath)
+			if err != nil {
+				http.Error(w, "Unable to read file", http.StatusInternalServerError)
+				return
+			}
+
+			// Detect content type from filename
+			// Default to text/plain so unknown file types are viewable in the browser
+			contentType := "text/plain; charset=utf-8"
+			ext := strings.ToLower(filepath.Ext(requestPath))
+			switch ext {
+			case ".html", ".htm":
+				contentType = "text/html; charset=utf-8"
+			case ".css":
+				contentType = "text/css; charset=utf-8"
+			case ".js":
+				contentType = "application/javascript"
+			case ".json":
+				contentType = "application/json"
+			case ".xml", ".junit":
+				contentType = "text/xml; charset=utf-8"
+			case ".png":
+				contentType = "image/png"
+			case ".jpg", ".jpeg":
+				contentType = "image/jpeg"
+			case ".gif":
+				contentType = "image/gif"
+			case ".webp":
+				contentType = "image/webp"
+			case ".svg":
+				contentType = "image/svg+xml"
+			case ".pdf":
+				contentType = "application/pdf"
+			case ".zip", ".gz", ".tar", ".tgz":
+				contentType = "application/octet-stream"
+			}
+
+			w.Header().Set("Content-Type", contentType)
+			w.Header().Set("Content-Length", strconv.Itoa(len(content)))
+			w.Write(content)
 		}
 	})
 
