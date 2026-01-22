@@ -183,6 +183,7 @@ func orasPull() error {
 		if err != nil {
 			return err
 		}
+		defer res.Body.Close()
 		if res.StatusCode != http.StatusOK {
 			return fmt.Errorf("got unexpected status from quay repo %s: %d", url, res.StatusCode)
 		}
