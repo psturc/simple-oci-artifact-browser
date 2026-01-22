@@ -6,85 +6,127 @@
     <title>Artifacts Browser</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
-            color: #333;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+            background-color: #f6f8fa;
+            color: #24292f;
             padding: 20px;
+            line-height: 1.5;
         }
         h1 {
-            color: #4CAF50;
-            text-align: center;
+            color: #1a7f37;
+            margin-bottom: 8px;
+        }
+        h3 {
+            color: #57606a;
+            font-weight: 500;
+            font-size: 14px;
+            margin: 16px 0 8px 0;
+        }
+        .repo-links {
+            margin-bottom: 8px;
+        }
+        .repo-links a {
+            color: #0969da;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .repo-links a:hover {
+            text-decoration: underline;
+        }
+        .sync-info {
+            color: #57606a;
+            font-size: 13px;
+            margin-bottom: 24px;
+            padding: 8px 12px;
+            background: #fff;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            display: inline-block;
         }
         ul {
             list-style: none;
             padding: 0;
+            margin: 0;
+            background: #fff;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
         }
         li {
-            margin: 10px 0;
-            font-size: 18px;
+            border-bottom: 1px solid #d0d7de;
         }
-        a {
+        li:last-child {
+            border-bottom: none;
+        }
+        li a {
             text-decoration: none;
-            color: #333;
-            padding: 8px 12px;
-            border-radius: 5px;
-            display: inline-block;
-        }
-        a:hover {
-            background-color: #e0e0e0;
-        }
-        .file, .directory {
+            color: #24292f;
+            padding: 10px 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 5px;
+        }
+        li a:hover {
+            background-color: #f6f8fa;
+        }
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .icon {
-            margin-right: 10px;
-            font-size: 20px;
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
         }
-        .metadata {
-            color: #888;
+        .filename {
             font-size: 14px;
         }
-        .directory a {
-            color: #4CAF50;
+        .directory .filename {
+            color: #0969da;
         }
-        .parent {
-            font-size: 18px;
-            color: #888;
+        .metadata {
+            color: #57606a;
+            font-size: 12px;
+            text-align: right;
+        }
+        .parent a {
+            color: #57606a;
+        }
+        .parent a:hover {
+            color: #0969da;
         }
     </style>
 </head>
 <body>
     <h1>📁 Artifacts Browser</h1>
-    <h3>Showing latest 50 OCI artifacts for repo:</h3>
-    {{ range .Repositories }}
-        <a href="https://quay.io/{{ .Name }}">quay.io/{{ .Name }}</a>
-    {{ end }}
-    <h3>Artifacts are synced every {{ .SyncInterval }} minute(s)</a></h3>
+
+    <h3>Repositories</h3>
+    <div class="repo-links">
+        {{ range .Repositories }}
+            <a href="https://quay.io/{{ .Name }}">quay.io/{{ .Name }}</a><br>
+        {{ end }}
+    </div>
+
+    <div class="sync-info">
+        ⏱️ Synced every {{ .SyncInterval }} minute(s)
+    </div>
 
     <ul>
         {{ if .ParentPath }}
-            <li class="parent"><a href="{{ .ParentPath }}">⬅️ Go Up (..)</a></li>
+            <li class="parent"><a href="{{ .ParentPath }}"><span class="file-info"><span class="icon">⬅️</span><span class="filename">..</span></span></a></li>
         {{ end }}
-        
+
         {{ range .Files }}
             <li class="{{ if .IsDir }}directory{{ else }}file{{ end }}">
-                <div>
-                    {{ if .IsDir }}
-                        <span class="icon">📂</span><a href="{{ .Path }}/">{{ .Name }}</a>
-                    {{ else }}
-                        <span class="icon">📄</span><a href="{{ .Path }}">{{ .Name }}</a>
-                    {{ end }}
-                </div>
-                <div class="metadata">
-                    {{ if not .IsDir }}
-                        {{ .Size }} bytes | Last modified: {{ .ModTime.Format "Jan 2, 2006 3:04 PM" }}
-                    {{ else }}
-                        Last modified: {{ .ModTime.Format "Jan 2, 2006 3:04 PM" }}
-                    {{ end }}
-                </div>
+                <a href="{{ .Path }}{{ if .IsDir }}/{{ end }}">
+                    <span class="file-info">
+                        <span class="icon">{{ if .IsDir }}📂{{ else }}📄{{ end }}</span>
+                        <span class="filename">{{ .Name }}</span>
+                    </span>
+                    <span class="metadata">
+                        {{ if not .IsDir }}{{ .Size }} bytes · {{ end }}{{ .ModTime.Format "Jan 2, 2006 3:04 PM" }}
+                    </span>
+                </a>
             </li>
         {{ end }}
     </ul>
